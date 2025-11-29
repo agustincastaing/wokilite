@@ -1,0 +1,12 @@
+{
+    "name": "wokilite",
+    "version": "1.0.0",
+    "private": true,
+    "scripts": {
+      "build": "npm run build --prefix=api && npm run build --prefix=wokilite-frontend",
+      "dev": "concurrently \"npm run dev --prefix=api\" \"npm run dev --prefix=wokilite-frontend\""
+    },
+    "dependencies": {
+      "concurrently": "^8.0.0"
+    }
+  }
