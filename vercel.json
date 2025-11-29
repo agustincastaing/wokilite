@@ -15,7 +15,7 @@
     ],
     "routes": [
       { "src": "/api/(.*)", "dest": "/api/index.ts" },
-      { "src": "/(.*)", "dest": "/wokilite-frontend/dist/$1" }
+      { "src": "/(.*)", "dest": "wokilite-frontend/dist/$1" }
     ]
   }
   
