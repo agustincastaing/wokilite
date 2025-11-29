@@ -11,7 +11,7 @@ const logger = pino({ level: 'info' });
 const app = express();
 app.use(express.json());
 seedData();
-app.use(cors({ origin: 'http://localhost:5173' }));
+app.use(cors({ origin: 'https://wokilite.vercel.app/' }));
 
 app.get('/health', (req: Request, res: Response) => {
   res.json({ status: 'ok' });
