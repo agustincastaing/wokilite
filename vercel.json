@@ -28,8 +28,5 @@
         "src": "/(.*)",
         "dest": "/wokilite-frontend/dist/$1"
       }
-    ],
-    "env": {
-      "VITE_API_URL": "@vite_api_url"
-    }
+    ]
   }
