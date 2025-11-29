@@ -1,4 +1,4 @@
-import { app } from '../../wokilite/src/server.js'
+import { app } from './wokilite/src/server.js'
 
 export default app;
 
