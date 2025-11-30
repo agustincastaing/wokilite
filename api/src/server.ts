@@ -9,14 +9,19 @@ import cors from 'cors';
 const logger = pino({ level: 'info' });
 
 const app = express();
+
+console.log('📦 Express app initialized');
+
 app.use(express.json());
 seedData();
 
+console.log('✅ Seed data loaded');
 app.use(cors({
   origin: ['https://wokilite.vercel.app', 'http://localhost:5173']
 }));
 
 app.get('/health', (_, res) => {
+  console.log('💚 Health check called');
   res.json({ status: 'ok' });
 });
 

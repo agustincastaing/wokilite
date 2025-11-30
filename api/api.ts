@@ -1,5 +1,7 @@
 import { app } from './src/server'
 
+console.log('🚀 API route handler loaded (api.ts)');
+
 export default app;
 
 export const config = {
