@@ -9,23 +9,32 @@ import cors from 'cors';
 const logger = pino({ level: 'info' });
 
 const app = express();
+
+console.log('📦 Express app initialized');
+
 app.use(express.json());
 seedData();
-app.use(cors({ origin: 'http://localhost:5173' }));
 
-app.get('/health', (req: Request, res: Response) => {
+console.log('✅ Seed data loaded');
+app.use(cors({
+  origin: ['https://wokilite.vercel.app', 'http://localhost:5173']
+}));
+
+app.get('/health', (_, res) => {
+  console.log('💚 Health check called');
   res.json({ status: 'ok' });
 });
 
+if (require.main === module) {
+  const PORT = 3000;
+  app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
+}
 
 app.use('/restaurants', restaurantRouter);
 app.use('/availability', availabilityRouter);
 app.use('/reservations', reservationRouter);
 
-const PORT = 3000;
-app.listen(PORT, () => {
-  logger.info(`Server running on http://localhost:${PORT}`);
-  logger.info('Routes registered: /health, /availability, /reservations, /restaurants');
-});
 
-export { app };
+export default app ;
