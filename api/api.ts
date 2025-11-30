@@ -1,11 +1,10 @@
-import { app } from './src/server'
+import { app } from './src/server';
 
-console.log('🚀 API route handler loaded (api.ts)');
-
-export default app;
-
-export const config = {
-  api: {
-    bodyParser: false, // Express already handles JSON
-  },
+export default (req: any, res: any) => {
+  // Vercel passes the full path, but Express needs it without /api prefix
+  req.url = req.url.replace(/^\/api/, '') || '/';
+  
+  console.log('🚀 API called api.ts:', req.url);
+  
+  return app(req, res);
 };
