@@ -24,5 +24,5 @@ app.use('/restaurants', restaurantRouter);
 app.use('/availability', availabilityRouter);
 app.use('/reservations', reservationRouter);
 
-// ❗ REMOVE app.listen() — Vercel will handle it
+
 export { app };
