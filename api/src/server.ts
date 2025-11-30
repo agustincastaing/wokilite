@@ -25,6 +25,13 @@ app.get('/health', (_, res) => {
   res.json({ status: 'ok' });
 });
 
+if (require.main === module) {
+  const PORT = 3000;
+  app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
+}
+
 app.use('/restaurants', restaurantRouter);
 app.use('/availability', availabilityRouter);
 app.use('/reservations', reservationRouter);

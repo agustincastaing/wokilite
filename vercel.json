@@ -1,32 +1,5 @@
 {
-    "version": 2,
-    "buildCommand": "npm run build",
-    "installCommand": "npm install",
-    "builds": [
-      {
-        "src": "api/index.ts",
-        "use": "@vercel/node"
-      },
-      {
-        "src": "wokilite-frontend/package.json",
-        "use": "@vercel/static-build",
-        "config": {
-          "distDir": "wokilite-frontend/dist"
-        }
-      }
-    ],
-    "routes": [
-      {
-        "src": "/api/(.*)",
-        "dest": "/api/index.ts"
-      },
-      {
-        "src": "/assets/(.*)",
-        "dest": "/wokilite-frontend/dist/assets/$1"
-      },
-      {
-        "src": "/(.*)",
-        "dest": "/wokilite-frontend/dist/$1"
-      }
+    "rewrites": [
+      { "source": "/api/:path*", "destination": "/api" }
     ]
   }
