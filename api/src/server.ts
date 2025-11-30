@@ -37,4 +37,4 @@ app.use('/availability', availabilityRouter);
 app.use('/reservations', reservationRouter);
 
 
-export { app };
+export default app ;
