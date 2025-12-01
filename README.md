@@ -15,6 +15,7 @@ npm install
 npm run dev
 ```
 Server will be available at: [http://localhost:3000](http://localhost:3000)
+Server is currently hosted at [https://wokilite-358s.onrender.com/health](https://wokilite-358s.onrender.com/health)
 
 ### Frontend
 
