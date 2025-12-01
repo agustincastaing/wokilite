@@ -48,6 +48,7 @@ GET    /availability/floor-plan?restaurantId=R1&sectorId=S1[&dateTime=2025-09-08
 NOTES
 Used Grok AI to create test cases
 
+```text
 .
 ├── api
 │   ├── src
@@ -102,3 +103,4 @@ Used Grok AI to create test cases
 │   └── vite.config.ts
 │
 └── README.md
+```
