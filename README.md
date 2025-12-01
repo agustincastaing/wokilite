@@ -5,6 +5,11 @@ Node.js · TypeScript · Express · Zod · Luxon · Pino · Vitest · React · M
 
 ---
 
+## 🚀 Live Demo
+
+**Frontend**: https://wokilite.vercel.app  
+**Backend API**: https://wokilite-api.onrender.com
+
 ## How to Run
 
 ### Backend
