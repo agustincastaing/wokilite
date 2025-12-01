@@ -10,6 +10,11 @@ Node.js · TypeScript · Express · Zod · Luxon · Pino · Vitest · React · M
 **Frontend**: https://wokilite.vercel.app  
 **Backend API**: https://wokilite-api.onrender.com
 
+## Considerations: 
+
+The backend currently is hosted in a free tier render deploymet, might take a second to wake up
+
+
 ## How to Run
 
 ### Backend
@@ -20,7 +25,6 @@ npm install
 npm run dev
 ```
 Server will be available at: [http://localhost:3000](http://localhost:3000)
-Server is currently hosted at [https://wokilite-358s.onrender.com/health](https://wokilite-358s.onrender.com/health)
 
 ### Frontend
 
@@ -30,7 +34,6 @@ npm install
 npm run dev
 ```
 UI will be available at: [http://localhost:5173/](http://localhost:5173/)
-Server is currently hosted at: [https://wokilite.vercel.app/](https://wokilite.vercel.app/)
 
 ### Tests
 
