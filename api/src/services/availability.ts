@@ -35,7 +35,6 @@ function isSlotAllowed(startDt: DateTime, restaurant: Restaurant): boolean {
 }
 
 export function getPotentialSlots(date: string | any, restaurant: Restaurant): DateTime[] {
-  console.log({date})
   const day = DateTime.fromISO(date, { zone: restaurant.timezone }).startOf('day');
   const slots: DateTime[] = [];
 

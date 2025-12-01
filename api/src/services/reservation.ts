@@ -7,8 +7,43 @@ import { createInterval } from '../utils/time';
 
 const DURATION_MINUTES = 90;
 
-const idempotencyStore = new Map<string, Reservation>();
 const slotLocks = new Map<string, Promise<unknown>>();
+
+class IdempotencyStore {
+    private store = new Map<string, Reservation>();
+    private reservationToKey = new Map<string, string>();
+  
+    set(key: string, reservation: Reservation): void {
+      this.store.set(key, reservation);
+      this.reservationToKey.set(reservation.id, key);
+    }
+  
+    get(key: string): Reservation | undefined {
+      return this.store.get(key);
+    }
+  
+    has(key: string): boolean {
+      return this.store.has(key);
+    }
+  
+    delete(key: string): void {
+      const reservation = this.store.get(key);
+      if (reservation) {
+        this.reservationToKey.delete(reservation.id);
+      }
+      this.store.delete(key);
+    }
+  
+    deleteByReservationId(reservationId: string): void {
+      const key = this.reservationToKey.get(reservationId);
+      if (key) {
+        this.delete(key);
+      }
+    }
+  }
+  
+  export const idempotencyStore = new IdempotencyStore();
+  
 
 export async function createReservation(
     restaurantId: string,
@@ -51,7 +86,7 @@ export async function createReservation(
     const sectorTables = tables.filter(t => t.sectorId === sectorId);
     const suitableTables = sectorTables
         .filter(t => t.minSize <= partySize && partySize <= t.maxSize)
-        .sort((a, b) => a.maxSize - b.maxSize); // Optimize: Fill smallest tables first
+        .sort((a, b) => a.maxSize - b.maxSize);
 
     if (suitableTables.length === 0) {
         throw { status: 409, message: 'no_capacity' };
@@ -67,19 +102,15 @@ export async function createReservation(
             // Create the interval for the NEW reservation
             const newReservationInterval = Interval.fromDateTimes(start, end);
 
-            // Check availability again strictly inside the lock
             const availableTable = suitableTables.find(table => {
                 const isOccupied = reservations.some(res => {
-                    // Only check CONFIRMED reservations
+
                     if (res.status !== 'CONFIRMED') return false;
 
-                    // Filter by restaurantId AND sectorId
                     if (res.restaurantId !== restaurantId || res.sectorId !== sectorId) return false;
 
-                    // Check if this table is in this reservation
                     if (!res.tableIds.includes(table.id)) return false;
 
-                    // Time overlap check
                     const existingReservationInterval = createInterval(
                         res.startDateTimeISO,
                         res.endDateTimeISO,
@@ -122,4 +153,19 @@ export async function createReservation(
     slotLocks.set(lockKey, myExecution);
 
     return myExecution;
+}
+
+export async function deleteReservation(reservationId: string) {
+    const reservation = reservations.find(r => r.id === reservationId && r.status === 'CONFIRMED');
+    if (!reservation) {
+        return null;
+    }
+
+    // Delete idempotency key to allow rebooking
+    idempotencyStore.deleteByReservationId(reservationId);
+
+    reservation.status = 'CANCELLED';
+    reservation.updatedAt = DateTime.now().toISO();
+
+    return reservation;
 }

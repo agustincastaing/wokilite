@@ -52,8 +52,7 @@ export default function Home() {
   const [customerEmail, setCustomerEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [maxCapacity, setMaxCapacity] = useState(0)
-
+  const [maxCapacity, setMaxCapacity] = useState(0);
 
   useEffect(() => {
     const fetchRestaurants = async () => {
@@ -85,7 +84,7 @@ export default function Home() {
     const restaurant = restaurants.find(r => r.id === selectedRestaurant);
     const selectedSectorObj = restaurant?.sectors?.find(s => s.id === sector);
     setMaxCapacity(selectedSectorObj?.maxCapacity || 6);
-  }
+  };
 
   // Fetch availability
   const handleCheckAvailability = async () => {
@@ -138,10 +137,70 @@ export default function Home() {
       setCustomerPhone('');
       setCustomerEmail('');
       setSelectedSlot('');
-      handleCheckAvailability()
+      handleCheckAvailability();
       setTimeout(() => setSuccess(false), 3000);
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to create reservation');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Create random test reservation
+  const handleCreateTestReservation = async () => {
+    if (!selectedRestaurant || !selectedSector || !date) {
+      setError('Seleccionar restaurante, sector y fecha primero');
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      // Fetch availability for random party size
+      const randomPartySize = Math.floor(Math.random() * 4) + 2; // 2-5 people
+      const response = await api.getAvailability(
+        selectedRestaurant,
+        selectedSector,
+        date,
+        randomPartySize
+      );
+
+      const availableSlots = response.data.slots.filter((s: AvailabilitySlot) => s.available);
+      
+      if (availableSlots.length === 0) {
+        setError('No hay turnos disponibles para crear reserva de prueba');
+        setSubmitting(false);
+        return;
+      }
+
+      // Pick random slot
+      const randomSlot = availableSlots[Math.floor(Math.random() * availableSlots.length)];
+
+      // Generate random customer data
+      const names = ['Juan Pérez', 'María García', 'Carlos López', 'Ana Martínez', 'Pedro Rodríguez'];
+      const randomName = names[Math.floor(Math.random() * names.length)];
+      const randomPhone = `+549${Math.floor(Math.random() * 900000000) + 100000000}`;
+      const randomEmail = `test${Date.now()}@example.com`;
+
+      // Create reservation
+      await api.createReservation({
+        restaurantId: selectedRestaurant,
+        sectorId: selectedSector,
+        partySize: randomPartySize,
+        startDateTimeISO: randomSlot.start,
+        customer: {
+          name: randomName,
+          phone: randomPhone,
+          email: randomEmail,
+        },
+      });
+
+      setSuccess(true);
+      handleCheckAvailability();
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to create test reservation');
     } finally {
       setSubmitting(false);
     }
@@ -152,9 +211,26 @@ export default function Home() {
 
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
-      <Typography variant="h3" gutterBottom sx={{ mb: 4, fontWeight: 'bold' }}>
-        🍽️ Reservar
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+        <Typography variant="h3" sx={{ fontWeight: 'bold' }}>
+          🍽️ Reservar
+        </Typography>
+        
+        {/* Test Reservation Button */}
+        <Button
+          variant="outlined"
+          color="warning"
+          onClick={handleCreateTestReservation}
+          disabled={submitting || !selectedRestaurant || !selectedSector || !date}
+          size="small"
+          sx={{ 
+            textTransform: 'none',
+            fontWeight: 600,
+          }}
+        >
+          🧪 Reserva de prueba
+        </Button>
+      </Box>
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       {success && <Alert severity="success" sx={{ mb: 2 }}>Reserva creada exitosamente!</Alert>}
@@ -217,7 +293,7 @@ export default function Home() {
               {/* Party Size */}
               <Box sx={{ mb: 3 }}>
                 <Typography variant="body2" sx={{ display: 'block', mb: 1, fontWeight: 600 }}>
-                  ¿CUÁNTAS PERSONAS? {maxCapacity > 0? `(Max ${maxCapacity})`: ''}
+                  ¿CUÁNTAS PERSONAS? {maxCapacity > 0 ? `(Max ${maxCapacity})` : ''}
                 </Typography>
                 <TextField
                   fullWidth

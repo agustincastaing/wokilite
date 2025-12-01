@@ -4,9 +4,9 @@
   "description": "",
   "main": "dist/server.js",
   "scripts": {
-    "dev": "nodemon --watch \"src\" --ext \"ts\" --delay 500ms --exec \"ts-node --transpile-only src/server.ts\"",
     "build": "tsc",
-    "start": "node dist/server.js",
+    "dev": "nodemon --exec tsx src/server.ts",
+    "start": "tsx src/server.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -27,11 +27,13 @@
     "nodemon": "^3.1.11",
     "supertest": "^7.1.4",
     "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.14"
   },
   "dependencies": {
     "cors": "^2.8.5",
+    "crypto": "^1.0.1",
     "express": "^5.1.0",
     "pino": "^10.1.0",
     "uuid": "^13.0.0",

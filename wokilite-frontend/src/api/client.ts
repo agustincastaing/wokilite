@@ -1,6 +1,7 @@
 import axios from 'axios';
+import { generateReservationIdempotencyKey } from '../utils/idempotency';
 
-const API_BASE = 'https://wokilite.vercel.app/api';
+const API_BASE = 'http://localhost:3000';
 
 const client = axios.create({
   baseURL: API_BASE,
@@ -22,10 +23,12 @@ export const api = {
     }),
 
   // Reservations
-  createReservation: (payload: any) =>
+  createReservation: (payload: any) => {
+    const idempotencyKey = generateReservationIdempotencyKey(payload);
     client.post('/reservations', payload, {
-      headers: { 'Idempotency-Key': crypto.randomUUID() },
-    }),
+      headers: { 'Idempotency-Key': idempotencyKey },
+    })
+  },
   cancelReservation: (id: string) =>
     client.delete(`/reservations/${id}`),
   getReservationsForDay: (restaurantId: string, date: string, sectorId?: string) =>

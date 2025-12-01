@@ -74,7 +74,6 @@ export default function Reservations() {
     fetchRestaurants();
   }, []);
 
-  // Set first sector when restaurant changes
   useEffect(() => {
     const restaurant = restaurants.find(r => r.id === selectedRestaurant);
     if (restaurant?.sectors && restaurant.sectors.length > 0) {
@@ -97,6 +96,7 @@ export default function Reservations() {
         date,
         selectedSector || undefined
       );
+      //add pagination
       setReservations(response.data.items || []);
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to load reservations');
@@ -105,7 +105,6 @@ export default function Reservations() {
     }
   };
 
-  // Auto-load on mount and when filters change
   useEffect(() => {
     if (selectedRestaurant && date) {
       handleLoadReservations();
@@ -170,7 +169,12 @@ export default function Reservations() {
             value={selectedSector}
             onChange={(e) => setSelectedSector(e.target.value)}
           >
-            <MenuItem value="">All Sections</MenuItem>
+            <MenuItem value="">
+              <strong>Todos</strong>
+            </MenuItem>
+            <MenuItem disabled divider>
+              <hr style={{ margin: 0, border: 0, borderTop: '1px solid #e0e0e0' }}/>
+            </MenuItem>
             {currentRestaurant?.sectors?.map(s => (
               <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>
             ))}
@@ -192,7 +196,7 @@ export default function Reservations() {
 
       {/* Reservations Count */}
       <Typography variant="subtitle1" sx={{ mb: 2 }}>
-        {confirmedReservations.length} reservations on {DateTime.fromISO(date).toFormat('MMM dd, yyyy')}
+        {confirmedReservations.length} reservas el {DateTime.fromISO(date).toFormat('MMM dd, yyyy')}
       </Typography>
 
       {/* Reservations Table */}

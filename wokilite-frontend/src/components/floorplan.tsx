@@ -52,6 +52,7 @@ export default function FloorPlan({
     const [date, setDate] = useState(DateTime.now().toISODate());
     const [slots, setSlots] = useState([]);
     const [selectedTime, setSelectedTime] = useState<string>('');
+    const [restaurantsLoaded, setRestaurantsLoaded] = useState(false);
 
     const GRID_SIZE = 10;
     const CELL_SIZE = 60;
@@ -85,17 +86,22 @@ export default function FloorPlan({
                 setRestaurants(response.data.restaurants);
                 if (response.data.restaurants.length > 0) {
                     setSelectedRestaurant(response.data.restaurants[0].id);
-                    setSelectedSector(response.data.restaurants[0].sectors[0].id)
+                    setSelectedSector(response.data.restaurants[0].sectors[0].id);
                 }
             } catch (err) {
                 setError('Failed to load restaurants');
+            } finally {
+                setRestaurantsLoaded(true);
             }
         };
         fetchRestaurants();
     }, []);
 
-
     const fetchFloorPlan = async () => {
+        if (!selectedRestaurant || !selectedSector) {
+            return;
+        }
+
         try {
             const response: any = await api.getFloorPlan(
                 selectedRestaurant,
@@ -106,7 +112,7 @@ export default function FloorPlan({
             if (response.data) {
                 setTables(response.data.tables);
                 setLastUpdated(new Date().toLocaleTimeString());
-                setSlots(response.data.slots)
+                setSlots(response.data.slots);
                 setError(null);
             } else {
                 setError(response.error || 'Failed to load floor plan');
@@ -119,13 +125,19 @@ export default function FloorPlan({
         }
     };
 
+    // Only fetch floor plan after restaurants are loaded
     useEffect(() => {
+        // Wait until restaurants are loaded and we have selections
+        if (!restaurantsLoaded || !selectedRestaurant || !selectedSector) {
+            return;
+        }
+
         fetchFloorPlan();
 
         const startPolling = () => {
             if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
 
-            // Poll every 30 seconds
+            // Poll every 15 seconds
             pollIntervalRef.current = setInterval(() => {
                 if (autoRefresh) {
                     fetchFloorPlan();
@@ -151,7 +163,7 @@ export default function FloorPlan({
             if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
-    }, [selectedRestaurant, selectedSector, autoRefresh, date, selectedTime ]);
+    }, [restaurantsLoaded, selectedRestaurant, selectedSector, autoRefresh, date, selectedTime]);
 
     const getTableColor = (table: Table) => {
         return table.isOccupied ? '#E74C3C' : '#27AE60';
@@ -166,7 +178,7 @@ export default function FloorPlan({
 
     const currentRestaurant = restaurants.find(r => r.id === selectedRestaurant);
 
-    if (loading) {
+    if (loading || !restaurantsLoaded) {
         return (
             <Container sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
                 <CircularProgress />
@@ -187,7 +199,13 @@ export default function FloorPlan({
                             <Select
                                 fullWidth
                                 value={selectedRestaurant}
-                                onChange={(e) => setSelectedRestaurant(e.target.value)}
+                                onChange={(e) => {
+                                    setSelectedRestaurant(e.target.value);
+                                    const newRestaurant = restaurants.find(r => r.id === e.target.value);
+                                    if (newRestaurant?.sectors?.length && newRestaurant?.sectors?.length > 0) {
+                                        setSelectedSector(newRestaurant.sectors[0].id);
+                                    }
+                                }}
                             >
                                 {restaurants.map(r => (
                                     <MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>
@@ -204,7 +222,6 @@ export default function FloorPlan({
                                 value={selectedSector}
                                 onChange={(e) => setSelectedSector(e.target.value)}
                             >
-                                <MenuItem value="">All Sections</MenuItem>
                                 {currentRestaurant?.sectors?.map(s => (
                                     <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>
                                 ))}
@@ -249,7 +266,6 @@ export default function FloorPlan({
                                 )}
                             </Select>
                         </Box>
-                    </Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Typography variant="caption" color="textSecondary">
                             {lastUpdated ? `Updated: ${lastUpdated}` : 'Loading...'}
@@ -258,6 +274,7 @@ export default function FloorPlan({
                             control={<Switch checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} />}
                             label="Auto-refresh"
                         />
+                    </Box>
                     </Box>
                 </Box>
 

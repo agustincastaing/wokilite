@@ -1,7 +1,7 @@
 // tests/reservation.core.test.ts
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
-import { app } from '../src/server';
+import app from '../src/server';
 import { reservations } from '../src/data';
 import { DateTime } from 'luxon';
 import { isoEquals } from '../src/utils/time';
@@ -40,7 +40,6 @@ describe('WokiLite CORE – Minimal Test Cases', () => {
       .send(validPayload)
       .expect(201);
 
-    // CAPTURE what the system actually assigned (T4)
     const assignedTableIds = createRes.body.tableIds;
     expect(assignedTableIds.length).toBeGreaterThan(0);
     const assignedTableId = assignedTableIds[0];
@@ -57,14 +56,12 @@ describe('WokiLite CORE – Minimal Test Cases', () => {
       })
       .expect(200);
 
-    // Find the exact time slot
     const expectedStartMillis = DateTime.fromISO(validPayload.startDateTimeISO).toMillis();
 
     const slot = avail.body.slots.find((s: any) =>
       DateTime.fromISO(s.start).toMillis() === expectedStartMillis
     );
 
-    // We must assert that a slot was actually found before accessing its properties.
     expect(slot).toBeDefined();
 
     // 3. Assertion
@@ -83,6 +80,7 @@ describe('WokiLite CORE – Minimal Test Cases', () => {
       request(app).post('/reservations').set('Idempotency-Key', 'conc-2').send(validPayload),
     ]);
 
+    //this happens because we only have 1 table that fits 6 people
     const success = [res1, res2].filter(r => r.status === 201);
     const conflict = [res1, res2].filter(r => r.status === 409);
 
