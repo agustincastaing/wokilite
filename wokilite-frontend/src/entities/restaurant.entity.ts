@@ -2,7 +2,7 @@ export interface Restaurant {
     id: string;
     name: string;
     sectors: Sector[];
-    timezone: any; 
+    timezone: string; 
   }
 
  export interface Sector {

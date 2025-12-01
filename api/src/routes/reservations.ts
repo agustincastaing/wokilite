@@ -1,4 +1,3 @@
-// src/routes/reservations.ts
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { createReservation, deleteReservation } from '../services/reservation';

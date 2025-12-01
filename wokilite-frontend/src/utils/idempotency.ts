@@ -1,5 +1,3 @@
-// src/utils/idempotency.ts
-
 export function generateReservationIdempotencyKey(payload: {
   restaurantId: string;
   sectorId: string;

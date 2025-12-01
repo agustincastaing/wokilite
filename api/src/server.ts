@@ -10,12 +10,12 @@ const logger = pino({ level: 'info' });
 
 const app = express();
 
-console.log('📦 Express app initialized');
+console.log('Express app initialized');
 
 app.use(express.json());
 seedData();
 
-console.log('✅ Seed data loaded');
+console.log('Seed data loaded');
 app.use(cors({
   origin: ['https://wokilite.vercel.app', 'http://localhost:5173']
 }));

@@ -53,7 +53,7 @@ export default function Home() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [maxCapacity, setMaxCapacity] = useState(0);
-
+  const [notes, setNotes] = useState('');
   useEffect(() => {
     const fetchRestaurants = async () => {
       try {
@@ -131,12 +131,14 @@ export default function Home() {
           phone: customerPhone,
           email: customerEmail,
         },
+        notes: notes !== '' ? notes : undefined,
       });
       setSuccess(true);
       setCustomerName('');
       setCustomerPhone('');
       setCustomerEmail('');
       setSelectedSlot('');
+      setNotes('');
       handleCheckAvailability();
       setTimeout(() => setSuccess(false), 3000);
     } catch (err: any) {
@@ -194,6 +196,7 @@ export default function Home() {
           phone: randomPhone,
           email: randomEmail,
         },
+        notes: 'Reserva de prueba',
       });
 
       setSuccess(true);
@@ -390,6 +393,16 @@ export default function Home() {
                 type="email"
                 value={customerEmail}
                 onChange={(e) => setCustomerEmail(e.target.value)}
+                sx={{ mb: 2 }}
+              />
+
+              <TextField
+                fullWidth
+                label="Notas"
+                value={notes}
+                multiline
+                rows={3}
+                onChange={(e) => setNotes(e.target.value)}
                 sx={{ mb: 2 }}
               />
 

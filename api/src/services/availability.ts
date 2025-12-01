@@ -13,16 +13,6 @@ export function getRestaurant(id: string): Restaurant {
   return r;
 }
 
-function getSectorTables(sectorId: string, restaurantId: string): Table[] {
-  const sector = sectors.find(s => s.id === sectorId && s.restaurantId === restaurantId);
-  if (!sector) throw new Error('Sector not found');
-
-  const sectorTables = tables.filter(t => t.sectorId === sectorId);
-  if (sectorTables.length === 0) throw new Error('Sector has no tables');
-
-  return sectorTables;
-}
-
 function isSlotAllowed(startDt: DateTime, restaurant: Restaurant): boolean {
   if (!restaurant.shifts || restaurant.shifts.length === 0) return true;
 
@@ -46,21 +36,6 @@ export function getPotentialSlots(date: string | any, restaurant: Restaurant): D
   }
 
   return slots;
-}
-
-function isTableAvailable(tableId: string, start: DateTime, restaurant: Restaurant): boolean {
-  const reservationEnd = start.plus({ minutes: DURATION_MINUTES });
-  const newInterval = Interval.fromDateTimes(start, reservationEnd);
-
-  return !reservations.some(res => {
-    if (res.status !== 'CONFIRMED' || res.restaurantId !== restaurant.id) return false;
-    if (!res.tableIds.includes(tableId)) return false;
-
-    const resStart = DateTime.fromISO(res.startDateTimeISO).setZone(restaurant.timezone);
-    const resEnd = DateTime.fromISO(res.endDateTimeISO).setZone(restaurant.timezone);
-
-    return newInterval.overlaps(Interval.fromDateTimes(resStart, resEnd));
-  });
 }
 
 export function getAvailability(
@@ -95,7 +70,13 @@ export function getAvailability(
     if (restaurant.shifts && restaurant.shifts.length > 0) {
       const sStr = slotStart.toFormat('HH:mm');
       const eStr = slotEnd.toFormat('HH:mm');
-      inShift = restaurant.shifts.some(shift => sStr >= shift.start && eStr <= shift.end);
+      inShift = restaurant.shifts.some(shift => {
+        const startFits = sStr >= shift.start;
+        const endFits = eStr <= shift.end;
+        const crossesMidnight = eStr < sStr;
+        
+        return startFits && endFits && !crossesMidnight;
+      });
     }
 
     if (!inShift) {

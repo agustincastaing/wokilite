@@ -23,7 +23,18 @@ export const api = {
     }),
 
   // Reservations
-  createReservation: (payload: any) => {
+  createReservation: (payload: {
+    restaurantId: string;
+    sectorId: string;
+    startDateTimeISO: string;
+    partySize: number;
+    customer: {
+      name: string;
+      email?: string;
+      phone?: string;
+    };
+    notes?: string;
+  }) => {
     const idempotencyKey = generateReservationIdempotencyKey(payload);
     client.post('/reservations', payload, {
       headers: { 'Idempotency-Key': idempotencyKey },
