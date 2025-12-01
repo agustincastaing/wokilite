@@ -24,7 +24,8 @@ cd wokilite-frontend
 npm install
 npm run dev
 ```
-UI will be available at: [http://localhost:5173/floor-plan](http://localhost:5173/floor-plan)
+UI will be available at: [http://localhost:5173/](http://localhost:5173/)
+Server is currently hosted at: [https://wokilite.vercel.app/](https://wokilite.vercel.app/)
 
 ### Tests
 
