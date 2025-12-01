@@ -20,6 +20,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <Button color="inherit" component={RouterLink} to="/floor-plan">
             Plano
           </Button>
+          <Button color="inherit" component={RouterLink} to="/timeline">
+            Timeline
+          </Button>
         </Toolbar>
       </AppBar>
       <Box component="main">{children}</Box>
