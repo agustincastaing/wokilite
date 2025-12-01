@@ -17,7 +17,11 @@ seedData();
 
 console.log('Seed data loaded');
 app.use(cors({
-  origin: ['https://wokilite.vercel.app', 'http://localhost:5173']
+  origin: [
+    'https://wokilite.vercel.app',
+    'http://localhost:5173',
+    process.env.FRONTEND_URL || '*'
+  ]
 }));
 
 app.get('/health', (_, res) => {
@@ -25,12 +29,10 @@ app.get('/health', (_, res) => {
   res.json({ status: 'ok' });
 });
 
-if (require.main === module) {
-  const PORT = 3000;
-  app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
-}
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
 
 app.use('/restaurants', restaurantRouter);
 app.use('/availability', availabilityRouter);
