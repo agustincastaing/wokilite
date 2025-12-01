@@ -21,7 +21,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             Plano
           </Button>
           <Button color="inherit" component={RouterLink} to="/timeline">
-            Timeline
+            Vista Diaria
           </Button>
         </Toolbar>
       </AppBar>
