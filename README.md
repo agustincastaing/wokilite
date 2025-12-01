@@ -24,6 +24,12 @@ npm run dev
 ```
 UI will be available at: [http://localhost:5173/floor-plan](http://localhost:5173/floor-plan)
 
+### Tests
+
+```sh
+npm  run test
+```
+
 ---
 
 ## API Endpoints
@@ -85,8 +91,36 @@ GET /availability/floor-plan?restaurantId=R1&sectorId=S1[&dateTime=2025-09-08T19
 
 ---
 
-## Notes
 
+## Considerations: 
+
+The current implementation uses client-side idempotency key generation for simplicity. In production, I would:
+
+1. Use server-generated idempotency keys **OR**
+2. Implement database-level uniqueness constraints on  
+   `(restaurantId, sectorId, customerEmail, startDateTime)`
+3. Add idempotency key expiration (currently keys persist forever)
+4. Consider using a proper idempotency library (e.g., [idempotent-request](https://github.com/ahmadnassri/node-idempotent-request))
+
+**The current approach works for the demo but has limitations:**
+
+- Keys persist indefinitely (can lead to a memory leak in a long-running app)
+- Clients can manipulate keys (doesn't break security, but not ideal)
+- Requires client-side hashing logic
+
+## Duplicate Prevention
+
+The system prevents duplicate reservations at two levels:
+
+1. **Idempotency Key**: Prevents duplicate requests (network retries)
+2. **Customer+Time Check**: Prevents the same customer from booking 
+   multiple reservations at the same restaurant/time, even with 
+   different idempotency keys
+
+This business rule assumes one customer = one reservation per time slot.
+
+
+## Notes
 - Test cases were created using Grok AI.
 
 <details>

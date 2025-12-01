@@ -102,6 +102,22 @@ export async function createReservation(
             // Create the interval for the NEW reservation
             const newReservationInterval = Interval.fromDateTimes(start, end);
 
+            const duplicateReservation = reservations.find(res => 
+                res.status === 'CONFIRMED' &&
+                res.restaurantId === restaurantId &&
+                res.sectorId === sectorId &&
+                res.startDateTimeISO === start.toISO() &&
+                (res.customer.email === customer.email || res.customer.phone === customer.phone)
+            );
+    
+            if (duplicateReservation) {
+                throw { 
+                    status: 409, 
+                    message: 'duplicate_reservation',
+                    detail: 'Customer already has a reservation at this time'
+                };
+            }
+
             const availableTable = suitableTables.find(table => {
                 const isOccupied = reservations.some(res => {
 
