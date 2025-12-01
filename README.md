@@ -19,6 +19,7 @@ Server will be available at: [http://localhost:3000](http://localhost:3000)
 ### Frontend
 
 ```sh
+cd wokilite-frontend
 npm install
 npm run dev
 ```
