@@ -1,7 +1,7 @@
 # WokiLite – Restaurant Reservation System
 
 **Stack:**  
-Node.js · TypeScript · Express · Zod · Luxon · Pino · Vitest
+Node.js · TypeScript · Express · Zod · Luxon · Pino · Vitest · React · Material UI
 
 ---
 
@@ -27,7 +27,7 @@ UI will be available at: [http://localhost:5173/floor-plan](http://localhost:517
 ### Tests
 
 ```sh
-npm  run test
+npm run test
 ```
 
 ---
