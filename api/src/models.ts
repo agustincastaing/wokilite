@@ -35,6 +35,12 @@ export interface Customer {
   updatedAt: ISODateTime;
 }
 
+export interface CreateCustomer {
+  name: string;
+  phone: string;
+  email: string;
+}
+
 export type ReservationStatus = 'CONFIRMED' | 'PENDING' | 'CANCELLED';
 
 export interface Reservation {
@@ -50,4 +56,11 @@ export interface Reservation {
   notes?: string;
   createdAt: ISODateTime;
   updatedAt: ISODateTime;
+}
+
+export interface AvailabilitySlot {
+  start: string;
+  available: boolean;
+  tables?: string[];
+  reason?: string;
 }

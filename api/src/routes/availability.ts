@@ -1,8 +1,8 @@
 import { Router, Request, Response } from 'express';
-import { getAvailability, getPotentialSlots } from '../services/availability';
+import { getAvailability, getPotentialSlots, getRestaurant } from '../services/availability';
 import { z } from 'zod';
-import { reservations, restaurants, sectors, tables } from '../data';
 import { DateTime, Interval } from 'luxon';
+import { sectorRepository, tableRepository, reservationRepository } from '../repositories';
 
 const router = Router();
 
@@ -24,10 +24,10 @@ interface FloorPlanTable {
     time: string;
     partySize: number;
   };
-  slots?: any[]
+  slots?: any[];
 }
 
-router.get('/', (req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response) => {
   const parseResult = querySchema.safeParse(req.query);
   if (!parseResult.success) {
     return res.status(400).json({ error: 'invalid_params' });
@@ -36,22 +36,22 @@ router.get('/', (req: Request, res: Response) => {
   const { restaurantId, sectorId, date, partySize } = parseResult.data;
 
   try {
-    const slots = getAvailability(restaurantId, sectorId, date, partySize);
+    const slots = await getAvailability(restaurantId, sectorId, date, partySize);
 
     return res.json({
       slotMinutes: 15,
       durationMinutes: 90,
-      slots
+      slots,
     });
   } catch (err: any) {
-    if (err.message.includes('not found')) {
+    if (err.status === 404 || err.message?.includes('not found')) {
       return res.status(404).json({ error: 'not_found', detail: err.message });
     }
     return res.status(500).json({ error: 'internal_error' });
   }
 });
 
-router.get('/floor-plan', (req: Request, res: Response) => {
+router.get('/floor-plan', async (req: Request, res: Response) => {
   const { restaurantId, sectorId, dateTime, time } = req.query;
 
   try {
@@ -62,37 +62,46 @@ router.get('/floor-plan', (req: Request, res: Response) => {
       });
     }
 
-    const restaurant = restaurants.find(r => r.id === restaurantId);
-    if (!restaurant) {
-      return res.status(404).json({ error: 'restaurant_not_found' });
-    }
+    const restaurant = await getRestaurant(restaurantId as string);
 
-    const sector = sectors.find(s => s.id === sectorId && s.restaurantId === restaurantId as string);
-    if (!sector) {
+    const sector = await sectorRepository.findById(sectorId as string);
+    if (!sector || sector.restaurantId !== restaurantId) {
       return res.status(404).json({ error: 'sector_not_found' });
     }
 
-    const sectorTables = tables.filter(t => t.sectorId === sectorId);
+    const sectorTables = await tableRepository.findBySectorId(sectorId as string);
 
     let referenceTime: DateTime;
-    let slots: DateTime<boolean>[] = []
+    let slots: DateTime[] = [];
 
-    if (time) {
-      referenceTime = DateTime.fromISO(time as string).setZone(restaurant.timezone);
+    if (time && typeof time === 'string') {
+      referenceTime = DateTime.fromISO(time).setZone(restaurant.timezone);
       if (!referenceTime.isValid) {
         return res.status(400).json({ error: 'invalid_datetime' });
       }
     } else {
       referenceTime = DateTime.now().setZone(restaurant.timezone);
     }
-    slots = getPotentialSlots(dateTime, restaurant)
+
+    // Get potential slots for the date
+    const dateStr = dateTime && typeof dateTime === 'string' 
+      ? dateTime 
+      : referenceTime.toISODate()!;
+    slots = getPotentialSlots(dateStr, restaurant);
+
     // Calculate the 15-minute slot interval
     const slotStart = referenceTime;
     const slotEnd = referenceTime.plus({ minutes: 15 });
     const slotInterval = Interval.fromDateTimes(slotStart, slotEnd);
+
+    // Get confirmed reservations for this restaurant/sector
+    const reservations = await reservationRepository.findConfirmedByRestaurantAndSector(
+      restaurantId as string,
+      sectorId as string
+    );
+
     const activeReservationsInSlot = reservations.filter(res => {
       if (res.status !== 'CONFIRMED') return false;
-      if (res.restaurantId !== restaurantId) return false;
 
       const resStart = DateTime.fromISO(res.startDateTimeISO).setZone(restaurant.timezone);
       const resEnd = DateTime.fromISO(res.endDateTimeISO).setZone(restaurant.timezone);
@@ -134,10 +143,13 @@ router.get('/floor-plan', (req: Request, res: Response) => {
       sectorName: sector.name,
       referenceTime: referenceTime.toISO(),
       tables: floorPlanTables,
-      slots: slots
+      slots: slots.map(s => s.toISO()),
     });
   } catch (err: any) {
     console.error('Error fetching floor plan:', err);
+    if (err.status === 404) {
+      return res.status(404).json({ error: 'not_found', detail: err.message });
+    }
     return res.status(500).json({
       error: 'internal_error',
       detail: err.message,

@@ -1,187 +1,169 @@
 import { DateTime, Interval } from 'luxon';
 import { v4 as uuidv4 } from 'uuid';
-import { Reservation, Customer } from '../models';
-import { reservations, tables } from '../data';
-import { getRestaurant } from './availability';
+import {
+  restaurantRepository,
+  tableRepository,
+  reservationRepository,
+} from '../repositories';
 import { createInterval } from '../utils/time';
+import type { Reservation, Customer, CreateCustomer } from '../models';
+import { getRestaurant } from './availability';
 
 const DURATION_MINUTES = 90;
 
+// In-memory locks for concurrency control (consider Redis for production)
 const slotLocks = new Map<string, Promise<unknown>>();
 
-class IdempotencyStore {
-    private store = new Map<string, Reservation>();
-    private reservationToKey = new Map<string, string>();
-  
-    set(key: string, reservation: Reservation): void {
-      this.store.set(key, reservation);
-      this.reservationToKey.set(reservation.id, key);
-    }
-  
-    get(key: string): Reservation | undefined {
-      return this.store.get(key);
-    }
-  
-    has(key: string): boolean {
-      return this.store.has(key);
-    }
-  
-    delete(key: string): void {
-      const reservation = this.store.get(key);
-      if (reservation) {
-        this.reservationToKey.delete(reservation.id);
-      }
-      this.store.delete(key);
-    }
-  
-    deleteByReservationId(reservationId: string): void {
-      const key = this.reservationToKey.get(reservationId);
-      if (key) {
-        this.delete(key);
-      }
-    }
-  }
-  
-  export const idempotencyStore = new IdempotencyStore();
-  
-
+/**
+ * Create a new reservation
+ */
 export async function createReservation(
-    restaurantId: string,
-    sectorId: string,
-    partySize: number,
-    startDateTimeISO: string,
-    customer: Customer,
-    notes: string | undefined,
-    idempotencyKey: string
+  restaurantId: string,
+  sectorId: string,
+  partySize: number,
+  startDateTimeISO: string,
+  customer: CreateCustomer,
+  notes: string | undefined,
+  idempotencyKey: string
 ): Promise<Reservation> {
+  // 1. Idempotency Check
+  const existing = await reservationRepository.findByIdempotencyKey(idempotencyKey);
+  if (existing) {
+    return existing;
+  }
 
-    // 1. Idempotency Check
-    if (idempotencyStore.has(idempotencyKey)) {
-        return idempotencyStore.get(idempotencyKey)!;
-    }
+  const restaurant = await getRestaurant(restaurantId);
 
-    const restaurant = getRestaurant(restaurantId);
+  // Ensure we work in the Restaurant's timezone for all math
+  const start = DateTime.fromISO(startDateTimeISO).setZone(restaurant.timezone);
 
-    // Ensure we work in the Restaurant's timezone for all math
-    const start = DateTime.fromISO(startDateTimeISO).setZone(restaurant.timezone);
+  if (!start.isValid) throw { status: 400, message: 'Invalid startDateTimeISO' };
 
-    if (!start.isValid) throw { status: 400, message: 'Invalid startDateTimeISO' };
+  // 2. Validate Grid (15 mins)
+  if (start.minute % 15 !== 0 || start.second !== 0 || start.millisecond !== 0) {
+    throw { status: 422, message: 'Start time must be on a 15-minute grid' };
+  }
 
-    // 2. Validate Grid (15 mins)
-    if (start.minute % 15 !== 0 || start.second !== 0 || start.millisecond !== 0) {
-        throw { status: 422, message: 'Start time must be on a 15-minute grid' };
-    }
+  // 3. Shift Validation
+  const end = start.plus({ minutes: DURATION_MINUTES });
+  if (restaurant.shifts && restaurant.shifts.length > 0) {
+    const startStr = start.toFormat('HH:mm');
+    const endStr = end.toFormat('HH:mm');
+    const fits = restaurant.shifts.some(s => startStr >= s.start && endStr <= s.end);
+    if (!fits) throw { status: 422, message: 'outside_service_window' };
+  }
 
-    // 3. Shift Validation
-    const end = start.plus({ minutes: DURATION_MINUTES });
-    if (restaurant.shifts && restaurant.shifts.length > 0) {
-        const startStr = start.toFormat('HH:mm');
-        const endStr = end.toFormat('HH:mm');
-        const fits = restaurant.shifts.some(s => startStr >= s.start && endStr <= s.end);
-        if (!fits) throw { status: 422, message: 'outside_service_window' };
-    }
+  // 4. Identify Candidate Tables
+  const suitableTables = await tableRepository.findBySectorAndCapacity(sectorId, partySize);
 
-    // 4. Identify Candidate Tables
-    // Filter by sector AND capacity
-    const sectorTables = tables.filter(t => t.sectorId === sectorId);
-    const suitableTables = sectorTables
-        .filter(t => t.minSize <= partySize && partySize <= t.maxSize)
-        .sort((a, b) => a.maxSize - b.maxSize);
+  if (suitableTables.length === 0) {
+    throw { status: 409, message: 'no_capacity' };
+  }
 
-    if (suitableTables.length === 0) {
-        throw { status: 409, message: 'no_capacity' };
-    }
+  // 5. Locking (Concurrency Control)
+  const lockKey = `${sectorId}:${start.toFormat("yyyy-MM-dd'T'HH:mm")}`;
+  const previous = slotLocks.get(lockKey) || Promise.resolve();
 
-    // 5. Locking (Concurrency Control)
-    const lockKey = `${sectorId}:${start.toFormat("yyyy-MM-dd'T'HH:mm")}`;
-    const previous = slotLocks.get(lockKey) || Promise.resolve();
+  const myExecution = previous
+    .catch(() => {})
+    .then(async () => {
+      // Create the interval for the NEW reservation
+      const newReservationInterval = Interval.fromDateTimes(start, end);
 
-    const myExecution = previous
-        .catch(() => { })
-        .then(() => {
-            // Create the interval for the NEW reservation
-            const newReservationInterval = Interval.fromDateTimes(start, end);
+      // Check for duplicate reservation
+      const duplicateReservation = await reservationRepository.findDuplicate(
+        restaurantId,
+        sectorId,
+        start.toISO()!,
+        customer.email!,
+        customer.phone!
+      );
 
-            const duplicateReservation = reservations.find(res => 
-                res.status === 'CONFIRMED' &&
-                res.restaurantId === restaurantId &&
-                res.sectorId === sectorId &&
-                res.startDateTimeISO === start.toISO() &&
-                (res.customer.email === customer.email || res.customer.phone === customer.phone)
-            );
-    
-            if (duplicateReservation) {
-                throw { 
-                    status: 409, 
-                    message: 'duplicate_reservation',
-                    detail: 'Customer already has a reservation at this time'
-                };
-            }
+      if (duplicateReservation) {
+        throw {
+          status: 409,
+          message: 'duplicate_reservation',
+          detail: 'Customer already has a reservation at this time',
+        };
+      }
 
-            const availableTable = suitableTables.find(table => {
-                const isOccupied = reservations.some(res => {
+      // Get all confirmed reservations for this restaurant/sector
+      const reservations = await reservationRepository.findConfirmedByRestaurantAndSector(
+        restaurantId,
+        sectorId
+      );
 
-                    if (res.status !== 'CONFIRMED') return false;
+      // Find available table
+      const availableTable = suitableTables.find(table => {
+        const isOccupied = reservations.some(res => {
+          if (res.status !== 'CONFIRMED') return false;
+          if (res.restaurantId !== restaurantId || res.sectorId !== sectorId) return false;
+          if (!res.tableIds.includes(table.id)) return false;
 
-                    if (res.restaurantId !== restaurantId || res.sectorId !== sectorId) return false;
+          const existingReservationInterval = createInterval(
+            res.startDateTimeISO,
+            res.endDateTimeISO,
+            restaurant.timezone
+          );
 
-                    if (!res.tableIds.includes(table.id)) return false;
-
-                    const existingReservationInterval = createInterval(
-                        res.startDateTimeISO,
-                        res.endDateTimeISO,
-                        restaurant.timezone
-                    );
-
-                    // Check for overlap
-                    return newReservationInterval.overlaps(existingReservationInterval);
-                });
-                return !isOccupied;
-            });
-
-            if (!availableTable) {
-                throw { status: 409, message: 'no_capacity' };
-            }
-
-            // Create Reservation
-            const now = DateTime.now().toISO();
-            const reservation: Reservation = {
-                id: uuidv4(),
-                restaurantId,
-                sectorId,
-                tableIds: [availableTable.id],
-                partySize,
-                startDateTimeISO: start.toISO(),
-                endDateTimeISO: end.toISO(),
-                status: 'CONFIRMED',
-                customer,
-                notes,
-                createdAt: now!,
-                updatedAt: now!,
-            };
-
-            reservations.push(reservation);
-            idempotencyStore.set(idempotencyKey, reservation);
-
-            return reservation;
+          // Check for overlap
+          return newReservationInterval.overlaps(existingReservationInterval);
         });
+        return !isOccupied;
+      });
 
-    slotLocks.set(lockKey, myExecution);
+      if (!availableTable) {
+        throw { status: 409, message: 'no_capacity' };
+      }
 
-    return myExecution;
+      // Create Reservation
+      const reservation = await reservationRepository.create({
+        restaurantId,
+        sectorId,
+        tableIds: [availableTable.id],
+        partySize,
+        startDateTimeISO: start.toISO()!,
+        endDateTimeISO: end.toISO()!,
+        customer,
+        notes,
+        idempotencyKey,
+        status: 'CONFIRMED',
+      });
+
+      return reservation;
+    });
+
+  slotLocks.set(lockKey, myExecution);
+
+  return myExecution;
 }
 
-export async function deleteReservation(reservationId: string) {
-    const reservation = reservations.find(r => r.id === reservationId && r.status === 'CONFIRMED');
-    if (!reservation) {
-        return null;
-    }
+/**
+ * Delete (cancel) a reservation
+ */
+export async function deleteReservation(reservationId: string): Promise<Reservation | null> {
+  const reservation = await reservationRepository.findById(reservationId);
 
-    // Delete idempotency key to allow rebooking
-    idempotencyStore.deleteByReservationId(reservationId);
+  if (!reservation || reservation.status !== 'CONFIRMED') {
+    return null;
+  }
 
-    reservation.status = 'CANCELLED';
-    reservation.updatedAt = DateTime.now().toISO();
+  // Delete idempotency key to allow rebooking
+  await reservationRepository.clearIdempotencyKey(reservationId);
 
-    return reservation;
+  // Update status to CANCELLED
+  const updated = await reservationRepository.updateStatus(reservationId, 'CANCELLED');
+
+  return updated;
+}
+
+/**
+ * Get reservations for a specific day
+ */
+export async function getReservationsByDay(
+  restaurantId: string,
+  date: string,
+  sectorId?: string
+): Promise<Reservation[]> {
+  return reservationRepository.findByDay(restaurantId, date, sectorId);
 }

@@ -1,18 +1,23 @@
-// src/services/availability.ts
 import { DateTime, Interval } from 'luxon';
-import { Restaurant, Table } from '../models';
-import { restaurants, tables, reservations, sectors } from '../data';
+import { restaurantRepository, tableRepository, reservationRepository } from '../repositories';
 import { createInterval } from '../utils/time';
+import type { Restaurant, AvailabilitySlot } from '../models';
 
 const SLOT_MINUTES = 15;
 const DURATION_MINUTES = 90;
 
-export function getRestaurant(id: string): Restaurant {
-  const r = restaurants.find(r => r.id === id);
-  if (!r) throw new Error('Restaurant not found');
+/**
+ * Get restaurant by ID (throws if not found)
+ */
+export async function getRestaurant(id: string): Promise<Restaurant> {
+  const r = await restaurantRepository.findById(id);
+  if (!r) throw { status: 404, message: 'Restaurant not found' };
   return r;
 }
 
+/**
+ * Check if a slot is within allowed shifts
+ */
 function isSlotAllowed(startDt: DateTime, restaurant: Restaurant): boolean {
   if (!restaurant.shifts || restaurant.shifts.length === 0) return true;
 
@@ -24,7 +29,10 @@ function isSlotAllowed(startDt: DateTime, restaurant: Restaurant): boolean {
   });
 }
 
-export function getPotentialSlots(date: string | any, restaurant: Restaurant): DateTime[] {
+/**
+ * Get potential time slots for a date
+ */
+export function getPotentialSlots(date: string, restaurant: Restaurant): DateTime[] {
   const day = DateTime.fromISO(date, { zone: restaurant.timezone }).startOf('day');
   const slots: DateTime[] = [];
 
@@ -38,26 +46,31 @@ export function getPotentialSlots(date: string | any, restaurant: Restaurant): D
   return slots;
 }
 
-export function getAvailability(
+/**
+ * Get availability for a restaurant/sector/date/partySize
+ */
+export async function getAvailability(
   restaurantId: string,
   sectorId: string,
   date: string,
   partySize: number
-) {
-  const restaurant = restaurants.find(r => r.id === restaurantId);
-  if (!restaurant) throw { status: 404, message: "Restaurant not found" };
+): Promise<AvailabilitySlot[]> {
+  const restaurant = await restaurantRepository.findById(restaurantId);
+  if (!restaurant) throw { status: 404, message: 'Restaurant not found' };
 
   // Use restaurant timezone for the 'day' definition
   const dayStart = DateTime.fromISO(date).setZone(restaurant.timezone).startOf('day');
 
   // Get all tables in sector that fit party size
-  const candidateTables = tables.filter(t =>
-    t.sectorId === sectorId &&
-    t.minSize <= partySize &&
-    partySize <= t.maxSize
+  const candidateTables = await tableRepository.findBySectorAndCapacity(sectorId, partySize);
+
+  // Get all confirmed reservations for this restaurant/sector
+  const reservations = await reservationRepository.findConfirmedByRestaurantAndSector(
+    restaurantId,
+    sectorId
   );
 
-  const slots = [];
+  const slots: AvailabilitySlot[] = [];
 
   // Generate 96 slots (24h * 4)
   for (let i = 0; i < 96; i++) {
@@ -74,18 +87,18 @@ export function getAvailability(
         const startFits = sStr >= shift.start;
         const endFits = eStr <= shift.end;
         const crossesMidnight = eStr < sStr;
-        
+
         return startFits && endFits && !crossesMidnight;
       });
     }
 
     if (!inShift) {
-      slots.push({ start: slotStart.toISO(), available: false, reason: "closed" });
+      slots.push({ start: slotStart.toISO()!, available: false, reason: 'closed' });
       continue;
     }
 
     if (candidateTables.length === 0) {
-      slots.push({ start: slotStart.toISO(), available: false, reason: "no_capacity" });
+      slots.push({ start: slotStart.toISO()!, available: false, reason: 'no_capacity' });
       continue;
     }
 
@@ -94,13 +107,16 @@ export function getAvailability(
     const availableTableIds = candidateTables.filter(t => {
       const isBooked = reservations.some(res => {
         if (res.status !== 'CONFIRMED') return false;
-
         if (res.sectorId !== sectorId || res.restaurantId !== restaurantId) return false;
 
         // Check if this table is in this reservation
         if (!res.tableIds.includes(t.id)) return false;
 
-        const resInterval = createInterval(res.startDateTimeISO, res.endDateTimeISO, restaurant.timezone)
+        const resInterval = createInterval(
+          res.startDateTimeISO,
+          res.endDateTimeISO,
+          restaurant.timezone
+        );
 
         // Check for overlap
         return slotInterval.overlaps(resInterval);
@@ -109,10 +125,10 @@ export function getAvailability(
     }).map(t => t.id);
 
     slots.push({
-      start: slotStart.toISO(),
+      start: slotStart.toISO()!,
       available: availableTableIds.length > 0,
       tables: availableTableIds.length > 0 ? availableTableIds : undefined,
-      reason: availableTableIds.length === 0 ? 'no_capacity' : undefined
+      reason: availableTableIds.length === 0 ? 'no_capacity' : undefined,
     });
   }
 

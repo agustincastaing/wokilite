@@ -1,9 +1,9 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { createReservation, deleteReservation } from '../services/reservation';
-import { Customer } from '../models';
+import { CreateCustomer, Customer } from '../models';
 import { DateTime } from 'luxon';
-import { reservations } from '../data';
+import { reservationRepository, restaurantRepository } from '../repositories';
 
 const router = Router();
 
@@ -23,12 +23,10 @@ const createBodySchema = z.object({
 });
 
 router.post('/', async (req: Request, res: Response) => {
-
   const idempotencyKey = req.headers['idempotency-key'];
   if (typeof idempotencyKey !== 'string' || idempotencyKey.trim() === '') {
     return res.status(400).json({ error: 'missing_or_invalid_idempotency_key' });
   }
-
 
   const parseResult = createBodySchema.safeParse(req.body);
   if (!parseResult.success) {
@@ -38,13 +36,11 @@ router.post('/', async (req: Request, res: Response) => {
   const { restaurantId, sectorId, partySize, startDateTimeISO, customer, notes } = parseResult.data;
 
   try {
-
-    const fullCustomer: Customer = {
+    // Partial customer info as Customer (backend will fill the rest)
+    const partialCustomer: CreateCustomer = {
       name: customer.name,
       phone: customer.phone,
       email: customer.email,
-      createdAt: iso(DateTime.now()),
-      updatedAt: iso(DateTime.now()),
     };
 
     const reservation = await createReservation(
@@ -52,7 +48,7 @@ router.post('/', async (req: Request, res: Response) => {
       sectorId,
       partySize,
       startDateTimeISO,
-      fullCustomer,
+      partialCustomer,
       notes,
       idempotencyKey
     );
@@ -73,10 +69,10 @@ router.post('/', async (req: Request, res: Response) => {
     });
   } catch (err: any) {
     if (err.status === 422) {
-      return res.status(422).json({ error: 'outside_service_window', detail: err.message });
+      return res.status(422).json({ error: err.message, detail: err.detail });
     }
     if (err.status === 409) {
-      return res.status(409).json({ error: 'no_capacity', detail: err.message });
+      return res.status(409).json({ error: err.message, detail: err.detail });
     }
     console.error('Unexpected error creating reservation:', err);
     return res.status(500).json({ error: 'internal_error' });
@@ -86,62 +82,61 @@ router.post('/', async (req: Request, res: Response) => {
 router.delete('/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
 
-  const index = reservations.findIndex(r => r.id === id && r.status === 'CONFIRMED');
-  if (index === -1) {
-    return res.status(404).json({ error: 'reservation_not_found_or_already_cancelled' });
+  try {
+    const reservation = await reservationRepository.findById(id);
+    if (!reservation || reservation.status !== 'CONFIRMED') {
+      return res.status(404).json({ error: 'reservation_not_found_or_already_cancelled' });
+    }
+
+    await deleteReservation(id);
+
+    return res.status(204).send();
+  } catch (err: any) {
+    console.error('Error deleting reservation:', err);
+    return res.status(500).json({ error: 'internal_error' });
   }
-
-  await deleteReservation(id)
-
-  reservations[index] = {
-    ...reservations[index],
-    status: 'CANCELLED',
-    updatedAt: iso(DateTime.now()),
-  };
-  return res.status(204).send();
 });
 
-router.get('/day', (req: Request, res: Response) => {
+router.get('/day', async (req: Request, res: Response) => {
   const { restaurantId, date, sectorId } = req.query;
 
   if (!restaurantId || !date || typeof restaurantId !== 'string' || typeof date !== 'string') {
     return res.status(400).json({ error: 'missing restaurantId or date' });
   }
 
-  const dayStart = DateTime.fromISO(`${date}T00:00:00`, { zone: 'America/Argentina/Buenos_Aires' });
-  const dayEnd = dayStart.plus({ days: 1 });
+  try {
+    // Get restaurant to use its timezone
+    const restaurant = await restaurantRepository.findById(restaurantId);
+    const timezone = restaurant?.timezone ?? 'America/Argentina/Buenos_Aires';
 
-  const dayReservations = reservations.filter(r => {
-    if (r.restaurantId !== restaurantId) return false;
-    //if (r.status !== 'CONFIRMED') return false;
+    // Fetch reservations from database
+    const sectorIdStr = typeof sectorId === 'string' ? sectorId : undefined;
+    const dayReservations = await reservationRepository.findByDay(restaurantId, date, sectorIdStr);
 
-    const start = DateTime.fromISO(r.startDateTimeISO);
-    return start >= dayStart && start < dayEnd;
-  });
+    const items = dayReservations.map(r => ({
+      id: r.id,
+      sectorId: r.sectorId,
+      tableIds: r.tableIds,
+      partySize: r.partySize,
+      start: r.startDateTimeISO,
+      end: r.endDateTimeISO,
+      status: r.status,
+      customer: r.customer,
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
+      ...(r.notes ? { notes: r.notes } : {}),
+    }));
 
-  const filtered = sectorId
-    ? dayReservations.filter(r => r.sectorId === sectorId)
-    : dayReservations;
+    items.sort((a, b) => a.start.localeCompare(b.start));
 
-  const items = filtered.map(r => ({
-    id: r.id,
-    sectorId: r.sectorId,
-    tableIds: r.tableIds,
-    partySize: r.partySize,
-    start: r.startDateTimeISO,
-    end: r.endDateTimeISO,
-    status: r.status,
-    customer: r.customer,
-    createdAt: r.createdAt,
-    updatedAt: r.updatedAt,
-    ...(r.notes ? { notes: r.notes } : {})
-  }));
-  items.sort((a, b) => a.start.localeCompare(b.start));
-
-  return res.json({
-    date: date as string,
-    items
-  });
+    return res.json({
+      date,
+      items,
+    });
+  } catch (err: any) {
+    console.error('Error fetching reservations:', err);
+    return res.status(500).json({ error: 'internal_error' });
+  }
 });
 
 export default router;

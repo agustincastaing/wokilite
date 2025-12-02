@@ -1,0 +1,105 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+datasource db {
+  provider = "sqlite"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Restaurant {
+  id        String   @id @default(uuid())
+  name      String
+  timezone  String   @default("America/New_York") // IANA timezone
+  shifts    String?  // JSON string: Array<{ start: string; end: string }>
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sectors      Sector[]
+  reservations Reservation[]
+
+  @@map("restaurants")
+}
+
+model Sector {
+  id           String   @id @default(uuid())
+  restaurantId String
+  name         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  restaurant   Restaurant    @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  tables       Table[]
+  reservations Reservation[]
+
+  @@map("sectors")
+}
+
+model Table {
+  id        String   @id @default(uuid())
+  sectorId  String
+  name      String
+  minSize   Int
+  maxSize   Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sector            Sector              @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+  reservationTables ReservationTable[]
+
+  @@map("tables")
+}
+
+model Customer {
+  id        String   @id @default(uuid())
+  name      String
+  phone     String
+  email     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  reservations Reservation[]
+
+  @@unique([email, phone])
+  @@map("customers")
+}
+
+model Reservation {
+  id               String   @id @default(uuid())
+  restaurantId     String
+  sectorId         String
+  customerId       String
+  partySize        Int
+  startDateTimeISO String   // ISO datetime string
+  endDateTimeISO   String   // ISO datetime string
+  status           String   @default("CONFIRMED") // CONFIRMED, PENDING, CANCELLED
+  notes            String?
+  idempotencyKey   String?  @unique
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  restaurant Restaurant         @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  sector     Sector             @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+  customer   Customer           @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  tables     ReservationTable[]
+
+  @@index([restaurantId, startDateTimeISO])
+  @@index([sectorId, startDateTimeISO])
+  @@index([status])
+  @@map("reservations")
+}
+
+// Junction table for many-to-many relationship between Reservation and Table
+model ReservationTable {
+  id            String @id @default(uuid())
+  reservationId String
+  tableId       String
+
+  reservation Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  table       Table       @relation(fields: [tableId], references: [id], onDelete: Cascade)
+
+  @@unique([reservationId, tableId])
+  @@map("reservation_tables")
+}

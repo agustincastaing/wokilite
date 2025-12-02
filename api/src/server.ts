@@ -1,10 +1,12 @@
 import express, { Request, Response } from 'express';
+import cors from 'cors';
 import { pino } from 'pino';
-import { seedData } from './data';
+import { prisma } from './db/client';
+
+// Routes
+import restaurantRouter from './routes/restaurants';
 import availabilityRouter from './routes/availability';
 import reservationRouter from './routes/reservations';
-import restaurantRouter from './routes/restaurants';
-import cors from 'cors';
 
 const logger = pino({ level: 'info' });
 
@@ -13,9 +15,7 @@ const app = express();
 console.log('Express app initialized');
 
 app.use(express.json());
-seedData();
 
-console.log('Seed data loaded');
 app.use(cors({
   origin: [
     'https://wokilite.vercel.app',
@@ -24,19 +24,46 @@ app.use(cors({
   ]
 }));
 
-app.get('/health', (_, res) => {
+app.get('/health', async (_req: Request, res: Response) => {
   console.log('💚 Health check called');
-  res.json({ status: 'ok' });
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: 'ok', database: 'connected' });
+  } catch (error) {
+    res.status(503).json({ status: 'error', database: 'disconnected' });
+  }
 });
 
 app.use('/restaurants', restaurantRouter);
 app.use('/availability', availabilityRouter);
 app.use('/reservations', reservationRouter);
 
+const PORT = process.env.PORT || 3000;
 
-export default app ;
+// Only start server if not in test mode
+if (process.env.NODE_ENV !== 'test') {
+  prisma.$connect().then(() => {
+    console.log('✅ Database connected');
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  }).catch((error: any) => {
+    console.error('❌ Failed to connect to database:', error);
+    process.exit(1);
+  });
+}
+
+// Graceful shutdown
+process.on('SIGINT', async () => {
+  console.log('\n⏳ Shutting down gracefully...');
+  await prisma.$disconnect();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  console.log('\n⏳ Shutting down gracefully...');
+  await prisma.$disconnect();
+  process.exit(0);
+});
+
+export default app;
