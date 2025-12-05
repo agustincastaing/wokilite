@@ -1,2 +1,2 @@
-export { prisma, default as prismaClient } from './client';
+export { prisma } from './client';
 export * from './seed';
